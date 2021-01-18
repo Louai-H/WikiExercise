@@ -1,4 +1,5 @@
 <h1>Famous Americans</h1>
+<br />
 
 <div class="container">
   <div class="row">
@@ -10,29 +11,39 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let american of americans" (click)="showPages(american)">
-            <td>{{ american.query.normalized[0].to }}</td>
+          <tr
+            *ngFor="let famousPerson of famousPeople$ | async"
+            (click)="showPages(famousPerson)"
+            [class.selected]="
+              selectedItem && famousPerson.title == selectedItem.title
+            "
+          >
+            <td class="clickable">{{ famousPerson.title }}</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <div class="col-5" *ngIf="showPagesList">
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th scope="col">Wikipedia pages for : {{ selectedName }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let page of pages">
-            <td>
-              {{ page.language }},
-              <a [attr.href]="page.link">Link</a>
-              Word Count:
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <ng-container *ngIf="showPagesList">
+      <div class="col-5">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th scope="col">
+                Wikipedia pages for : {{ selectedItem.title }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let page of pages$ | async">
+              <td>
+                {{ page.language }},
+                <a [attr.href]="page.link">Link</a>
+                Word Count: {{ page.wordCount }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </ng-container>
   </div>
 </div>

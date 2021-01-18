@@ -1,12 +1,15 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { from, Observable, throwError } from 'rxjs';
+import { FamousPerson } from '../famous/dto/famousPerson.dto';
+import { languageMap } from '../models/languageMap';
+import { Page } from '../models/page';
 import {
   catchError,
   map,
-  tap,
-  switchMap,
   mergeMap,
+  switchMap,
+  take,
   toArray,
 } from 'rxjs/operators';
 
@@ -16,60 +19,63 @@ import {
 export class WikiService {
   constructor(private http: HttpClient) {}
 
-  getWikiItem(title: string): Observable<any> {
+  getWikiItem(title: string): Observable<FamousPerson> {
     const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&format=json&origin=*&titles=${title}`;
 
-    return this.http.get<any>(wikiUrl).pipe(catchError(this.handleError));
-  }
-
-  getItemPages(wikiItem): Observable<any> {
-    const id: string = (Object.values(wikiItem.query.pages)[0] as any).pageprops
-      .wikibase_item;
-
-    const languages$ = this.getLanguaesById(id);
-    // languages$
-    //   .pipe(
-    //     tap((languages) => {console.log(languages)}),
-    //     switchMap((languages) =>
-    //       from(languages).pipe(
-    //         mergeMap((language) => this.getWordcount(language, title)),
-    //         toArray()
-    //       )
-    //     )
-    //   )
-
-    return languages$;
-  }
-
-  getLanguaesById(id: string): Observable<any[]> {
-    const wikiUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*&props=sitelinks&ids=${id}`;
     return this.http.get<any>(wikiUrl).pipe(
-      map((data) => {
-        const sitelinks: any[] = Object.values(
-          data.entities[`${id}`].sitelinks
-        );
-
-        const modifiedSiteLinks = sitelinks.map((el) => {
-          const site = el.site as string;
-          const newElement = {
-            language: site.substring(0, site.indexOf('wiki')),
-            title: el.title.replaceAll(' ', '_'),
-          };
-
-          return newElement;
-        });
-        return modifiedSiteLinks;
-      }),
-
+      map((p) => ({
+        title: p.query.normalized[0].to,
+        titleNoSpace: p.query.normalized[0].from,
+        wikibase_item: (Object.values(p.query.pages)[0] as any).pageprops
+          .wikibase_item,
+      })),
       catchError(this.handleError)
     );
   }
 
-  getWordcount(language: string, title: string) {
-    let wikiUrl = `http://${language}.wikipedia.org/w/api.php?format=json&origin=*&action=query&list=search&srwhat=nearmatch&srlimit=1&srsearch=${title}`;
+  getWikiItems(titles: string[]): Observable<FamousPerson[]> {
+    return from(titles).pipe(
+      mergeMap((t) => this.getWikiItem(t)),
+      toArray(),
+      catchError(this.handleError)
+    );
+  }
+
+  getItemPagesById(id: string): Observable<Page[]> {
+    const wikiUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*&props=sitelinks&ids=${id}`;
+    return this.http.get<any>(wikiUrl).pipe(
+      map((p) => {
+        const sitelinks: any[] = Object.values(p.entities[`${id}`].sitelinks);
+
+        const modifiedSiteLinks: Page[] = sitelinks.map((el) => {
+          const site = el.site as string;
+          const keyword = site.substring(0, site.indexOf('wiki'));
+          const titleNoSpace = el.title.replaceAll(' ', '_');
+
+          const newElement: Page = {
+            keyword: keyword,
+            language: languageMap.get(keyword),
+            title: el.title.replaceAll(' ', '_'),
+            link: `https://${keyword}.wikipedia.org/wiki/${titleNoSpace}`,
+            wordCount: -10,
+          };
+
+          return newElement;
+        });
+        const modifiedSiteLinksFiltered = modifiedSiteLinks.filter((p) =>
+          languageMap.has(p.keyword)
+        );
+        return modifiedSiteLinksFiltered;
+      }),
+      catchError(this.handleError)
+    );
+  }
+
+  getWordcount(keyword: string, title: string): Observable<number> {
+    const wikiUrl = `http://${keyword}.wikipedia.org/w/api.php?format=json&origin=*&action=query&list=search&srwhat=nearmatch&srlimit=1&srsearch=${title}`;
 
     return this.http.get<any>(wikiUrl).pipe(
-      tap((data) => console.log(JSON.stringify(data))),
+      map((d) => +d.query.search[0].wordcount),
       catchError(this.handleError)
     );
   }
