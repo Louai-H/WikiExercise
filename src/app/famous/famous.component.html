@@ -1,0 +1,38 @@
+<h1>Famous Americans</h1>
+
+<div class="container">
+  <div class="row">
+    <div class="col-5">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th scope="col">Famous People:</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let american of americans" (click)="showPages(american)">
+            <td>{{ american.query.normalized[0].to }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col-5" *ngIf="showPagesList">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th scope="col">Wikipedia pages for : {{ selectedName }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let page of pages">
+            <td>
+              {{ page.language }},
+              <a [attr.href]="page.link">Link</a>
+              Word Count:
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
