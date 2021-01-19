@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { from, Observable, throwError } from 'rxjs';
+import { forkJoin, from, Observable, throwError } from 'rxjs';
 import { FamousPerson } from '../famous/dto/famousPerson.dto';
 import { languageMap } from '../models/languageMap';
 import { Page } from '../models/page';
@@ -8,8 +8,8 @@ import {
   catchError,
   map,
   mergeMap,
+  shareReplay,
   switchMap,
-  take,
   toArray,
 } from 'rxjs/operators';
 
@@ -45,33 +45,91 @@ export class WikiService {
     const wikiUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*&props=sitelinks&ids=${id}`;
     return this.http.get<any>(wikiUrl).pipe(
       map((p) => {
-        const sitelinks: any[] = Object.values(p.entities[`${id}`].sitelinks);
-
-        const modifiedSiteLinks: Page[] = sitelinks.map((el) => {
-          const site = el.site as string;
-          const keyword = site.substring(0, site.indexOf('wiki'));
-          const titleNoSpace = el.title.replaceAll(' ', '_');
-
-          const newElement: Page = {
-            keyword: keyword,
-            language: languageMap.get(keyword),
-            title: el.title.replaceAll(' ', '_'),
-            link: `https://${keyword}.wikipedia.org/wiki/${titleNoSpace}`,
-            wordCount: -10,
-          };
-
-          return newElement;
-        });
-        const modifiedSiteLinksFiltered = modifiedSiteLinks.filter((p) =>
+        const pages = this.excractPagesOutOfApiSitelinks(p, id).filter((p) =>
           languageMap.has(p.keyword)
         );
-        return modifiedSiteLinksFiltered;
+        return pages;
+      }),
+      mergeMap((pages) => pages),
+      mergeMap((page) =>
+        this.getWordcount(page).pipe(
+          map((wordCount) => ({ ...page, wordCount } as Page))
+        )
+      ),
+      toArray(),
+      catchError(this.handleError)
+    );
+  }
+
+  private excractPagesOutOfApiSitelinks(data: any, id: string): Page[] {
+    const ApiSitelinks: any[] = Object.values(data.entities[`${id}`].sitelinks);
+
+    const pages: Page[] = ApiSitelinks.map((el) => {
+      const site = el.site as string;
+      const keyword = site.substring(0, site.indexOf('wiki'));
+      const titleNoSpace = el.title.replaceAll(' ', '_');
+
+      const newElement: Page = {
+        keyword: keyword,
+        language: languageMap.get(keyword),
+        title: el.title.replaceAll(' ', '_'),
+        link: `https://${keyword}.wikipedia.org/wiki/${titleNoSpace}`,
+      };
+      return newElement;
+    });
+    return pages;
+  }
+
+  // second solution for this function / just for practice:
+  getItemPagesById2(id: string): Observable<Page[]> {
+    const wikiUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*&props=sitelinks&ids=${id}`;
+    return this.http.get<any>(wikiUrl).pipe(
+      switchMap((p) => {
+        const pages = this.excractPagesOutOfApiSitelinks(p, id).filter((p) =>
+          languageMap.has(p.keyword)
+        );
+        return from(pages).pipe(
+          mergeMap((page) =>
+            this.getWordcount(page).pipe(
+              map((wordCount) => ({ ...page, wordCount } as Page))
+            )
+          ),
+          toArray()
+        );
       }),
       catchError(this.handleError)
     );
   }
 
-  getWordcount(keyword: string, title: string): Observable<number> {
+  // third solution for this function just for practice:
+  getItemPagesById3(id: string): Observable<Page[]> {
+    const wikiUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*&props=sitelinks&ids=${id}`;
+    return this.http.get<any>(wikiUrl).pipe(
+      map((p) => {
+        const pages = this.excractPagesOutOfApiSitelinks(p, id).filter((p) =>
+          languageMap.has(p.keyword)
+        );
+        return pages;
+      }),
+
+      switchMap((pages) =>
+        forkJoin(pages.map((page) => this.getPageWithCount(page)))
+      ),
+      shareReplay(1),
+      catchError(this.handleError)
+    );
+  }
+
+  private getPageWithCount(page: Page): Observable<Page> {
+    return this.getWordcount(page).pipe(
+      map((wordCount) => ({ ...page, wordCount } as Page)),
+      catchError(this.handleError)
+    );
+  }
+
+  getWordcount(page: Page): Observable<number> {
+    const keyword = page.keyword;
+    const title = page.title;
     const wikiUrl = `http://${keyword}.wikipedia.org/w/api.php?format=json&origin=*&action=query&list=search&srwhat=nearmatch&srlimit=1&srsearch=${title}`;
 
     return this.http.get<any>(wikiUrl).pipe(

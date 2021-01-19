@@ -1,4 +1,6 @@
-<h1>Famous Americans</h1>
+<span class="fa fa-spinner spinner" *ngIf="loading"></span>
+
+<h1 class="header">Famous Americans</h1>
 <br />
 
 <div class="container">
@@ -24,7 +26,7 @@
       </table>
     </div>
     <ng-container *ngIf="showPagesList">
-      <div class="col-5">
+      <div class="col-6">
         <table class="table table-striped">
           <thead>
             <tr>
@@ -38,7 +40,7 @@
               <td>
                 {{ page.language }},
                 <a [attr.href]="page.link">Link</a>
-                Word Count: {{ page.wordCount }}
+                , Word Count: {{ page.wordCount }}
               </td>
             </tr>
           </tbody>
